@@ -1,0 +1,5 @@
+__pycache__
+.env
+cuBLAS.and.cuDNN_CUDA12_win_v3.7z
+install.txt
+config/user_config.json

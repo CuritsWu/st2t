@@ -1,0 +1,49 @@
+{
+    "input_config.engine_type": [
+        "microphone",
+        "system"
+    ],
+    "input_config.device_name": [],
+    "transcribe_config.engine_type": [
+        "overlap",
+        "sliding"
+    ],
+    "transcribe_config.model_size": [
+        "tiny",
+        "base",
+        "small",
+        "medium",
+        "large-v3"
+    ],
+    "transcribe_config.compute_type": [
+        "int8",
+        "float16",
+        "float32",
+        "auto"
+    ],
+    "transcribe_config.language": [
+        "auto",
+        "en",
+        "ja",
+        "zh",
+        "zh-TW",
+        "zh-CN"
+    ],
+    "transcribe_config.task": [
+        "transcribe",
+        "translate"
+    ],
+    "translate_config.engine_type": [
+        "gemini",
+        "ollama"
+    ],
+    "translate_config.target_lang": [
+        "繁體中文",
+        "简体中文",
+        "English",
+        "日本語"
+    ],
+    "output_config.engine_type": [
+        "window"
+    ]
+}

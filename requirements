@@ -1,0 +1,9 @@
+SoundCard
+sounddevice
+scipy
+faster-whisper
+python-dotenv
+google-generativeai
+ollama
+websockets
+soundfile

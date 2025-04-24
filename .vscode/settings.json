@@ -1,0 +1,21 @@
+{
+    // -------- Python 專用區塊 --------
+    "[python]": {
+        // ❶ 指定 Black 做為預設 Formatter
+        "editor.defaultFormatter": "ms-python.black-formatter",
+        // ❷ 關閉傳統 formatOnSave，改用 Code Action 控制順序
+        "editor.formatOnSave": false,
+        // ❸ 明確排程：先 FormatDocument (Black)，再 OrganizeImports (isort)
+        "editor.codeActionsOnSave": [
+            // 由 Format Code Action 提供的 ID
+            "source.formatDocument",
+            // Python 擴充「Organize Imports」→ 會呼叫 isort
+            "source.organizeImports"
+        ]
+    },
+    // isort 額外參數（可省略）
+    "isort.args": [
+        "--profile",
+        "black"
+    ]
+}

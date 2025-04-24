@@ -1,0 +1,39 @@
+{
+    "input_config": {
+        "engine_type": "system",
+        "device_name": "",
+        "sample_rate": 16000
+    },
+    "transcribe_config": {
+        "engine_type": "sliding",
+        "model_size": "large-v3",
+        "compute_type": "float16",
+        "sample_rate": 16000,
+        "language": "ja",
+        "task": "translate",
+        "max_buffer_sec": 5.0,
+        "overlap_sec": 3.0,
+        "interval_sec": 2.0,
+        "vad_threshold": 0.5,
+        "beam_size": 20,
+        "no_speech_threshold": 0.5,
+        "temperature": 0.0,
+        "suppress": true,
+        "condition_on_previous_text": false,
+        "warm_up": false
+    },
+    "translate_config": {
+        "engine_type": "ollama",
+        "source_lang": "auto",
+        "target_lang": "繁體中文",
+        "model": "gemma3",
+        "temperature": 0.0,
+        "enabled": true
+    },
+    "output_config": {
+        "engine_type": "window",
+        "transparent_bg": true,
+        "font_size": 18.0,
+        "font_color": "#ffffff"
+    }
+}
