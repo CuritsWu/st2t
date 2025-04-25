@@ -139,15 +139,15 @@ class ConfigGUI(tk.Tk):
         cfg = self.default_cfg[section]
 
         for idx, (key, default) in enumerate(cfg.items()):
-            dot = f"{section}.{key}"
+            dot_path = f"{section}.{key}"
             row = ttk.Frame(parent)
             row.grid(row=idx, column=0, sticky="w", pady=2)
             self.rows[section][key] = row
-            ttk.Label(row, text=key, width=20).pack(side="left")
-            choices = self.choices.get(dot)
+            ttk.Label(row, text=key, width=25).pack(side="left")
+            choices = self.choices.get(dot_path)
             if choices is not None:
-                var = tk.StringVar(value=str(self._get_user(section, key, default)))
-                if dot == "input_config.device_name":
+                var = tk.StringVar(value=str(self._get_user_cfg(section, key, default)))
+                if dot_path == "input_config.device_name":
                     engine_type = self.user_cfg["input_config"].get(
                         "engine_type", self.default_cfg["input_config"]["engine_type"]
                     )
@@ -156,28 +156,28 @@ class ConfigGUI(tk.Tk):
                     row, textvariable=var, values=choices, state="readonly", width=18
                 )
             elif isinstance(default, bool):
-                var = tk.BooleanVar(value=self._get_user(section, key, default))
+                var = tk.BooleanVar(value=self._get_user_cfg(section, key, default))
                 widget = ttk.Checkbutton(row, variable=var)
             elif isinstance(default, float):
-                var = tk.StringVar(value=str(self._get_user(section, key, default)))
+                var = tk.StringVar(value=str(self._get_user_cfg(section, key, default)))
                 widget = tk.Spinbox(
-                    row, textvariable=var, from_=-1e9, to=1e9, increment=0.5, width=19
+                    row, textvariable=var, from_=-1e9, to=1e9, increment=0.1, width=19
                 )
             elif isinstance(default, int):
-                var = tk.StringVar(value=str(self._get_user(section, key, default)))
+                var = tk.StringVar(value=str(self._get_user_cfg(section, key, default)))
                 widget = tk.Spinbox(
                     row, textvariable=var, from_=-1e9, to=1e9, increment=1, width=19
                 )
             else:
-                var = tk.StringVar(value=str(self._get_user(section, key, default)))
+                var = tk.StringVar(value=str(self._get_user_cfg(section, key, default)))
                 widget = ttk.Entry(row, textvariable=var, width=21)
 
             widget.pack(side="left")
-            var.trace_add("write", lambda *_, p=dot, v=var: self._write_cfg(p, v.get()))
+            var.trace_add("write", lambda *_, p=dot_path, v=var: self._write_cfg(p, v.get()))
             self.widgets[section][key] = widget
 
             # 如果是 input_config.engine_type，要更新 device_name 清單
-            if dot == "input_config.engine_type":
+            if dot_path == "input_config.engine_type":
                 var.trace_add(
                     "write", lambda *_, v=var: self._on_input_engine_change(v)
                 )
@@ -201,7 +201,7 @@ class ConfigGUI(tk.Tk):
         cb["values"] = self._get_device_list(val)
         cb.set("")
 
-    def _get_user(self, section, key, default):
+    def _get_user_cfg(self, section, key, default):
         return self.user_cfg.get(section, {}).get(key, default)
 
     def _write_cfg(self, dot_path: str, raw):
@@ -235,8 +235,10 @@ class ConfigGUI(tk.Tk):
                 else:
                     row.grid()
             elif section == "translate_config":
-                if key == "model":
-                    row.grid() if eng == "ollama" else row.grid_remove()
+                if key == "target_lang":
+                    row.grid() if eng == "ollama" or eng =="gemini" else row.grid_remove()
+                elif key =="temperature":
+                    row.grid() if eng == "ollama" or eng =="gemini" else row.grid_remove()
                 else:
                     row.grid()
             else:

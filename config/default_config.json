@@ -11,20 +11,27 @@
         "sample_rate": 16000,
         "language": "ja",
         "task": "translate",
-        "max_buffer_sec": 5.0,
-        "overlap_sec": 3.0,
-        "interval_sec": 2.0,
+        "max_buffer_sec": 12.0,
+        "overlap_sec": 1.0,
+        "interval_sec": 3.0,
         "vad_threshold": 0.5,
-        "beam_size": 20,
-        "no_speech_threshold": 0.5,
-        "temperature": 0.0,
-        "suppress": true,
+        "beam_size": 5,
+        "temperature": "0.0, 0.2, 0.4",
+        "compression_ratio_threshold": 2.2,
+        "log_prob_threshold": -1.0,
+        "hallucination_silence_threshold": 1.0,
+        "repetition_penalty": 1.1,
+        "no_repeat_ngram_size": 3,
+        "prompt_reset_on_temperature": 0.3,
         "condition_on_previous_text": false,
-        "warm_up": false
+        "no_speech_threshold": 0.5,
+        "without_timestamps": true,
+        "word_timestamps": false,
+        "suppress": true,
+        "warm_up": true
     },
     "translate_config": {
         "engine_type": "ollama",
-        "source_lang": "auto",
         "target_lang": "繁體中文",
         "model": "gemma3",
         "temperature": 0.0,
@@ -33,7 +40,7 @@
     "output_config": {
         "engine_type": "window",
         "transparent_bg": true,
-        "font_size": 18.0,
+        "font_size": 18,
         "font_color": "#ffffff"
     }
 }

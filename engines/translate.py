@@ -6,6 +6,7 @@ from typing import Iterator
 
 import google.generativeai as genai
 import ollama
+import opencc
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -15,9 +16,8 @@ os.environ["OLLAMA_TIMEOUT"] = "10"
 
 class BaseTranslateEngine(ABC):
     def __init__(self, config: dict):
-        self.src = config.get("source_lang", "auto")
-        self.dest = config.get("target_lang", "zh-TW")
-        self.temperature = config.get("temperature", 0)
+        self.src = config.get("source_lang", "English")
+        self.dest = config.get("target_lang", "繁體中文")
 
         self.empty_timeout = float(config.get("empty_timeout", 5.0))
         self._last_non_empty = time.time()
@@ -39,10 +39,13 @@ class BaseTranslateEngine(ABC):
                 continue
             self._last_non_empty = now
             self._empty_emitted = False
-            yield self.translate(text).split()
+            yield self.translate(text)
 
-
-class GeminiTranslateEngine(BaseTranslateEngine):
+class AITranslateEngine(BaseTranslateEngine):
+    def __init__(self, config: dict):
+        super().__init__(config)
+        self.temperature = config.get("temperature", 0)
+class GeminiTranslateEngine(AITranslateEngine):
     def __init__(self, config: dict):
         super().__init__(config)
         api_key = os.getenv("google_key")
@@ -57,7 +60,7 @@ class GeminiTranslateEngine(BaseTranslateEngine):
         return response.text.strip()
 
 
-class OllamaTranslateEngine(BaseTranslateEngine):
+class OllamaTranslateEngine(AITranslateEngine):
     def __init__(self, config: dict):
         super().__init__(config)
         self.model = config.get("model", "gemma3")
@@ -71,12 +74,23 @@ class OllamaTranslateEngine(BaseTranslateEngine):
             response = ollama.chat(
                 model=self.model,
                 messages=[{"role": "user", "content": prompt}],
-                options={"temperature": 0.8},
+                options={"temperature": self.temperature},
             )
             return response.message.content.strip()
         except Exception as e:
             raise RuntimeError(f"翻譯失敗: {e}")
 
+class OpenCCTranslateEngine(BaseTranslateEngine):
+    def __init__(self, config: dict):
+        super().__init__(config)
+        self.model  = config.get("model ", "s2t")+".json"
+        self.converter = opencc.OpenCC(self.model)
+
+    def translate(self, text: str) -> str:
+        try:
+            return self.converter.convert(text)
+        except Exception as e:
+            raise RuntimeError(f"翻譯失敗: {e}")
 
 class TranslateEngineFactory:
     @staticmethod
@@ -86,5 +100,7 @@ class TranslateEngineFactory:
             return GeminiTranslateEngine(config)
         elif engine_type == "ollama":
             return OllamaTranslateEngine(config)
+        elif engine_type == "opencc":
+            return OpenCCTranslateEngine(config)
         else:
             raise ValueError(f"未知的翻譯引擎類型: {engine_type}")

@@ -26,8 +26,7 @@
         "en",
         "ja",
         "zh",
-        "zh-TW",
-        "zh-CN"
+        "zh-TW"
     ],
     "transcribe_config.task": [
         "transcribe",
@@ -35,7 +34,8 @@
     ],
     "translate_config.engine_type": [
         "gemini",
-        "ollama"
+        "ollama",
+        "opencc"
     ],
     "translate_config.target_lang": [
         "繁體中文",
