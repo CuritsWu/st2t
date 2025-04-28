@@ -132,7 +132,6 @@ async def stt_worker():
 
     # ---------- 把重活丟到執行緒 ----------
     def transcribe_job():
-        # for text in stt_engine.transcribe_stream(input_engine.stream_audio()):
         for text in translator.translate_stream(
             stt_engine.transcribe_stream(input_engine.stream_audio())
         ):
@@ -161,6 +160,6 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=8443,
         reload=False,
-        ssl_certfile="fastapi-cert.pem",
-        ssl_keyfile="fastapi-key.pem",
+        ssl_certfile="cert.pem",
+        ssl_keyfile="key.pem",
     )

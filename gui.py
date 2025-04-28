@@ -10,19 +10,7 @@ import soundcard as sc
 
 from config.path import (CHOICES_PATH, DEFAULT_CFG_PATH, TRANSLATE_MODEL_PATH,
                          USER_CFG_PATH)
-
-
-# ---------------------------------------------
-# 共用工具
-# ---------------------------------------------
-def deep_update(base: dict, patch: dict) -> dict:
-    merged = deepcopy(base)
-    for k, v in patch.items():
-        if k in merged and isinstance(merged[k], dict) and isinstance(v, dict):
-            merged[k] = deep_update(merged[k], v)
-        else:
-            merged[k] = v
-    return merged
+from utils.common import deep_update
 
 
 def deep_set(dic: dict, dot_path: str, value):
@@ -41,6 +29,8 @@ def ensure_files():
         CHOICES_PATH.write_text("{}", encoding="utf-8")
     if not USER_CFG_PATH.is_file():
         USER_CFG_PATH.write_text("{}", encoding="utf-8")
+    if not TRANSLATE_MODEL_PATH.is_file():
+        TRANSLATE_MODEL_PATH.write_text("{}", encoding="utf-8")
 
     default_cfg = json.loads(DEFAULT_CFG_PATH.read_text(encoding="utf-8"))
     user_cfg = json.loads(USER_CFG_PATH.read_text(encoding="utf-8"))

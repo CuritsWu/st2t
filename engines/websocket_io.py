@@ -4,8 +4,6 @@ import logging
 import queue
 from typing import List
 
-import numpy as np
-
 from engines.output import BaseOutputEngine
 from engines.voice_input import BaseInputEngine
 

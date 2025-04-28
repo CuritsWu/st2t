@@ -3,24 +3,12 @@ import json
 import signal
 import sys
 import threading
-from copy import deepcopy
 from pathlib import Path
 
 from config.path import DEFAULT_CFG_PATH, USER_CFG_PATH
 from engines.factory import (OutputEngineFactory, TranscribeEngineFactory,
                              TranslateEngineFactory, VoiceInputEngineFactory)
-
-
-# ---------- 共用 ---------- #
-def deep_update(base: dict, patch: dict) -> dict:
-    """遞迴把 patch 值覆蓋到 base；對 list / tuple 直接替換"""
-    merged = deepcopy(base)
-    for k, v in patch.items():
-        if k in merged and isinstance(merged[k], dict) and isinstance(v, dict):
-            merged[k] = deep_update(merged[k], v)
-        else:
-            merged[k] = v
-    return merged
+from utils.common import deep_update
 
 
 def load_config(path: str | Path | None) -> dict:
