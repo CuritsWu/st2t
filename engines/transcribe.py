@@ -1,4 +1,5 @@
 import logging
+import time
 from abc import ABC, abstractmethod
 from collections import deque
 from pathlib import Path
@@ -26,6 +27,7 @@ class BaseTranscribeEngine(ABC):
         lang = config.get("language", None)
         self.language = None if lang == "auto" else lang
         self.task = config.get("task", "transcribe")
+        self.init_prompt = config.get("init_prompt", "")
 
         # ----- 緩衝設定（依 GPU 容量 / 延遲需求調整） -----
         self.max_buffer_sec = config.get("max_buffer_sec", 12.0)  # 推薦 12–15 秒
@@ -35,19 +37,28 @@ class BaseTranscribeEngine(ABC):
 
         # ----- 解碼與抑制參數（Real‑time + 高準度 + 抗幻覺） -----
         self.beam_size = config.get("beam_size", 5)
-        temp = map(lambda t:float(t.strip()),config.get("temperature", "0.0, 0.2, 0.4").split(","))
+        temp = map(
+            lambda t: float(t.strip()),
+            config.get("temperature", "0.0, 0.2, 0.4").split(","),
+        )
         self.temperature = [*temp]
         self.vad_threshold = config.get("vad_threshold", 0.7)
         self.no_speech_threshold = config.get("no_speech_threshold", 0.7)
-        self.compression_ratio_threshold = config.get("compression_ratio_threshold", 2.2)
+        self.compression_ratio_threshold = config.get(
+            "compression_ratio_threshold", 2.2
+        )
         self.log_prob_threshold = config.get("log_prob_threshold", -1.0)
         self.hallucination_silence_threshold = config.get(
             "hallucination_silence_threshold", 1.0
         )
         self.repetition_penalty = config.get("repetition_penalty", 1.1)
         self.no_repeat_ngram_size = config.get("no_repeat_ngram_size", 3)
-        self.condition_on_previous_text = config.get("condition_on_previous_text", False)
-        self.prompt_reset_on_temperature = config.get("prompt_reset_on_temperature", 0.3)
+        self.condition_on_previous_text = config.get(
+            "condition_on_previous_text", False
+        )
+        self.prompt_reset_on_temperature = config.get(
+            "prompt_reset_on_temperature", 0.3
+        )
 
         # ── 句 / 字級時間碼 ─────────────────────────────
         self.without_timestamps = config.get("without_timestamps", False)
@@ -70,8 +81,6 @@ class BaseTranscribeEngine(ABC):
             "ja": "ja.wav",
             "en": "en.wav",
             "zh": "zh.wav",
-            "zh-TW": "zh.wav",
-            "zh-CN": "zh.wav",
         }
         warmup_file = lang_map.get(lang, "ja.wav")
         warmup_path = Path("warmup").joinpath(warmup_file)
@@ -97,8 +106,10 @@ class BaseTranscribeEngine(ABC):
             logging.error(f"warm_up transcribe 發生錯誤：{e}")
 
         self.reset_buffer()
+        self.full_silence()
 
-        # 再填充一段靜音以確保解碼圖被初始化
+    def full_silence(self):
+        # 填充一段靜音以確保解碼圖被初始化
         silence_samples = int(self.max_buffer_sec * self.sample_rate)
         silence = np.zeros(silence_samples, dtype=np.float32)
         self._buffer.append(silence)
@@ -235,16 +246,19 @@ class BaseTranscribeEngine(ABC):
             chunk = np.mean(chunk, axis=1)
         return chunk
 
-    def reset_buffer(self):
+    def reset_buffer(self, full_silence=False):
         """清空緩衝區"""
         self._buffer.clear()
         self._total_samples = 0
+        if full_silence:
+            self.full_silence()
+
 
 class OverlapTranscribeEngine(BaseTranscribeEngine):
     def __init__(self, config: dict):
         super().__init__(config)
         self.overlap_sec = config.get("overlap_sec", 1.0)
-        self._overlap_samples = int(self.overlap_sec * self.sample_rate)
+        self._overlap_samples = int(self.sample_rate * self.overlap_sec)
 
     def transcribe_stream(self, audio_stream):
         for chunk in audio_stream:
@@ -260,6 +274,7 @@ class OverlapTranscribeEngine(BaseTranscribeEngine):
                     language=self.language,
                     multilingual=self.language is None,
                     task=self.task,
+                    initial_prompt=self.init_prompt or None,
                     beam_size=self.beam_size,
                     temperature=self.temperature,
                     compression_ratio_threshold=self.compression_ratio_threshold,
@@ -288,16 +303,17 @@ class SlidingWindowTranscribeEngine(BaseTranscribeEngine):
     def __init__(self, config: dict):
         super().__init__(config)
         self.interval_sec = config.get("interval_sec", 3.0)
-        self._interval_samples = int(self.interval_sec * self.sample_rate)
-        self._new_samples = 0
+        self._interval_samples = int(self.sample_rate * self.interval_sec)
 
     def transcribe_stream(self, audio_stream):
+        last_end_time = 0.0
+        new_samples = 0
         for chunk in audio_stream:
             chunk = self.process_audio_chunk(chunk)
 
             self._buffer.append(chunk)
             self._total_samples += len(chunk)
-            self._new_samples += len(chunk)
+            new_samples += len(chunk)
 
             # 若 buffer 過長，丟棄最舊資料
             while self._total_samples > self._max_samples:
@@ -305,13 +321,15 @@ class SlidingWindowTranscribeEngine(BaseTranscribeEngine):
                 self._total_samples -= len(left)
 
             # 每收滿 interval_sec 就解碼一次
-            if self._new_samples >= self._interval_samples:
+            if new_samples >= self._interval_samples:
                 data = np.concatenate(self._buffer)
+                start_time = time.time()
                 segments, _ = self.model.transcribe(
                     data,
                     language=self.language,
                     multilingual=self.language is None,
                     task=self.task,
+                    initial_prompt=self.init_prompt or None,
                     beam_size=self.beam_size,
                     temperature=self.temperature,
                     compression_ratio_threshold=self.compression_ratio_threshold,
@@ -327,9 +345,20 @@ class SlidingWindowTranscribeEngine(BaseTranscribeEngine):
                     suppress_tokens=self.suppress_tokens,
                     suppress_blank=self.suppress,
                 )
+                transcribe_time = time.time() - start_time
+                target_interval = max(self.interval_sec, transcribe_time * 1.5)
+                self._interval_samples = int(target_interval * self.sample_rate)
 
-                yield "".join(seg.text for seg in segments)
-                self._new_samples = 0
+                new_samples = 0
+
+                new_segs = [s for s in segments if s.end >= last_end_time]
+                if not new_segs:
+                    last_end_time = 0
+                    self.reset_buffer(full_silence=True)
+                    yield ""
+                else:
+                    last_end_time = new_segs[-1].end
+                    yield "".join(s.text for s in new_segs).strip()
 
 
 class TranscribeEngineFactory:

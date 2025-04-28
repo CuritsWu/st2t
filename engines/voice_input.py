@@ -1,20 +1,19 @@
 import logging
-import queue
 import threading
+import time
 
 import soundcard as sc
+
+from utils.simple import SimpleThreadDeque
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 
 class RecorderWorker(threading.Thread):
-    """
-    從 recorder 取得音訊並推入佇列的工作者執行緒
-    使用 context manager 確保 _Recorder 初始化
-    """
-
-    def __init__(self, recorder, block_size, audio_queue, stop_event):
+    def __init__(
+        self, recorder, block_size, audio_queue: SimpleThreadDeque, stop_event
+    ):
         super().__init__(daemon=True)
         self.recorder = recorder
         self.block_size = block_size
@@ -27,7 +26,10 @@ class RecorderWorker(threading.Thread):
                 while not self.stop_event.is_set():
                     try:
                         data = rec.record(self.block_size)  # float32
-                        self.audio_queue.put(data)  # 不再 .tobytes()
+                        # --- 遇到雙聲道時 down-mix ---
+                        if data.ndim == 2:
+                            data = data.mean(axis=1, keepdims=True)
+                        self.audio_queue.append(data)
                     except Exception as e:
                         logger.error(f"錄音過程中發生錯誤: {e}")
         except Exception as e:
@@ -35,14 +37,12 @@ class RecorderWorker(threading.Thread):
 
 
 class AudioInputStream:
-    """
-    音訊串流管理：佇列存取與執行緒控制
-    """
-
-    def __init__(self, recorder, sample_rate: int):
-        self.audio_queue = queue.Queue()
+    def __init__(self, recorder, sample_rate: int, chunk_sec=0.03, max_latency=1.5):
+        # chunk_sec = 每幀 30 ms, # max_latency = 允許隊列最多積 1.5 s 的音
+        maxlen = int(max_latency / chunk_sec)
+        self.audio_queue = SimpleThreadDeque(maxlen=maxlen)
         self.stop_event = threading.Event()
-        self.block_size = int(sample_rate * 0.5)
+        self.block_size = int(sample_rate * chunk_sec)
         self.recorder = recorder
         self.worker = RecorderWorker(
             recorder, self.block_size, self.audio_queue, self.stop_event
@@ -52,34 +52,28 @@ class AudioInputStream:
         self.worker.start()
 
     def stream(self):
-        while not self.stop_event.is_set():
-            try:
-                data = self.audio_queue.get(timeout=1)  # float32 ndarray
-                yield data
-            except queue.Empty:
-                if self.stop_event.is_set():
-                    break
+        while not self.stop_event.is_set() or self.audio_queue:
+            if self.audio_queue:
+                yield self.audio_queue.popleft()  # float32 ndarray
+            else:
+                time.sleep(0.005)
 
     def stop(self):
         self.stop_event.set()
-        self.worker.join()
+        self.worker.join(timeout=3)
         logger.info("AudioInputStream 已停止並釋放資源")
 
 
 class BaseInputEngine:
-    """
-    引擎基底：呼叫 start/stop 並提供串流
-    """
-
     def __init__(self, sample_rate: int):
         self.sample_rate = sample_rate
-        self.streamer = None
+        self.streamer: AudioInputStream = None
 
     def start(self):
         raise NotImplementedError
 
     def stream_audio(self):
-        return self.streamer.stream() if self.streamer else iter(())
+        yield from self.streamer.stream()
 
     def stop(self):
         if self.streamer:
@@ -97,7 +91,6 @@ class MicrophoneInputEngine(BaseInputEngine):
     def start(self):
         try:
             mic = sc.get_microphone(self.device_name)
-
         except Exception as e:
             logger.warning(f"找不到指定麥克風 '{self.device_name}'，改為使用預設: {e}")
             mic = sc.default_microphone(include_loopback=False)

@@ -3,3 +3,8 @@ __pycache__
 cuBLAS.and.cuDNN_CUDA12_win_v3.7z
 install.txt
 config/user_config.json
+cert.pem
+key.pem
+help_files/start
+merge.py
+merged_output.py

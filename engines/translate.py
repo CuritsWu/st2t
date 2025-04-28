@@ -7,11 +7,13 @@ from typing import Iterator
 import google.generativeai as genai
 import ollama
 import opencc
+import torch
 from dotenv import load_dotenv
+from transformers import (AutoModelForSeq2SeqLM, AutoTokenizer,
+                          M2M100ForConditionalGeneration, M2M100Tokenizer)
 
 load_dotenv()
 logging.getLogger("httpx").setLevel(logging.WARNING)
-os.environ["OLLAMA_TIMEOUT"] = "10"
 
 
 class BaseTranslateEngine(ABC):
@@ -39,12 +41,15 @@ class BaseTranslateEngine(ABC):
                 continue
             self._last_non_empty = now
             self._empty_emitted = False
-            yield self.translate(text)
+            yield text + "\n" + self.translate(text)
+
 
 class AITranslateEngine(BaseTranslateEngine):
     def __init__(self, config: dict):
         super().__init__(config)
         self.temperature = config.get("temperature", 0)
+
+
 class GeminiTranslateEngine(AITranslateEngine):
     def __init__(self, config: dict):
         super().__init__(config)
@@ -64,12 +69,10 @@ class OllamaTranslateEngine(AITranslateEngine):
     def __init__(self, config: dict):
         super().__init__(config)
         self.model = config.get("model", "gemma3")
-
-    def _build_prompt(self, text: str) -> str:
-        return f"請將以下文字翻譯成 {self.dest}，並只給我翻譯內容回覆，確保滿足以上條件再回覆：\n{text}"
+        os.environ["OLLAMA_TIMEOUT"] = "10"
 
     def translate(self, text: str) -> str:
-        prompt = self._build_prompt(text)
+        prompt = f"請將以下文字翻譯成 {self.dest}，並只給我翻譯內容回復，確保滿足以上條件再回覆：\n{text}"
         try:
             response = ollama.chat(
                 model=self.model,
@@ -80,10 +83,115 @@ class OllamaTranslateEngine(AITranslateEngine):
         except Exception as e:
             raise RuntimeError(f"翻譯失敗: {e}")
 
+
+class NLLBTranslateEngine(AITranslateEngine):
+    _LANG_CODE_MAP = {
+        # 自行擴充 200 種 FLoRes 語言
+        "英文": "eng_Latn",
+        "日文": "jpn_Jpan",
+        "繁體中文": "zho_Hant",
+    }
+
+    def _to_code(self, lang_name: str) -> str:
+        try:
+            return self._LANG_CODE_MAP[lang_name]
+        except KeyError:
+            raise ValueError(f"未定義語言代碼：{lang_name}")
+
+    def __init__(self, config: dict):
+        super().__init__(config)
+        self.model_name = config.get("model", "facebook/nllb-200-distilled-600M")
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        self.src_code = self._to_code(self.src)
+        self.dest_code = self._to_code(self.dest)
+
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            self.model_name, src_lang=self.src_code
+        )
+        self.model = AutoModelForSeq2SeqLM.from_pretrained(
+            self.model_name, device_map="auto"
+        ).to(self.device)
+
+        self.bos_id = self.tokenizer.convert_tokens_to_ids(self._to_code(self.dest))
+
+    def translate(self, text: str) -> str:
+        if not text.strip():
+            return ""
+
+        inputs = self.tokenizer(
+            text, return_tensors="pt", truncation=True, max_length=512
+        ).to(self.device)
+
+        sampling = self.temperature > 0
+        gen_kwargs = {
+            "max_length": 512,
+            "forced_bos_token_id": self.bos_id,
+            "do_sample": sampling,
+            "temperature": self.temperature if sampling else None,
+        }
+        if not sampling:
+            gen_kwargs["num_beams"] = 4
+        ids = self.model.generate(**inputs, **gen_kwargs)
+
+        return self.tokenizer.batch_decode(ids, skip_special_tokens=True)[0].strip()
+
+
+class M2MTranslateEngine(AITranslateEngine):
+    _LANG_CODE_MAP = {
+        "英文": "en",
+        "日文": "ja",
+        "繁體中文": "zh",
+        "简体中文": "zh",
+    }
+
+    def _to_code(self, lang_name: str) -> str:
+        try:
+            return self._LANG_CODE_MAP[lang_name]
+        except KeyError:
+            raise ValueError(f"未定義語言代碼：{lang_name}")
+
+    def __init__(self, config):
+        super().__init__(config)
+        self.model_name = config.get("model", "facebook/m2m100_418M")
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        self.src_code = self._to_code(self.src)
+        self.dest_code = self._to_code(self.dest)
+
+        self.tokenizer = M2M100Tokenizer.from_pretrained(self.model_name)
+        self.model = M2M100ForConditionalGeneration.from_pretrained(self.model_name).to(
+            self.device
+        )
+        self.bos_id = self.tokenizer.get_lang_id(self.dest_code)
+
+    def translate(self, text: str) -> str:
+        if not text.strip():
+            return ""
+        self.tokenizer.src_lang = self.src_code
+
+        inputs = self.tokenizer(
+            text, return_tensors="pt", truncation=True, max_length=512
+        ).to(self.device)
+
+        sampling = self.temperature > 0
+        gen_kwargs = {
+            "max_length": 512,
+            "forced_bos_token_id": self.bos_id,
+            "do_sample": sampling,
+            "temperature": self.temperature if sampling else None,
+        }
+        if not sampling:
+            gen_kwargs["num_beams"] = 4
+        generated = self.model.generate(**inputs, **gen_kwargs)
+
+        return self.tokenizer.decode(generated[0], skip_special_tokens=True).strip()
+
+
 class OpenCCTranslateEngine(BaseTranslateEngine):
     def __init__(self, config: dict):
         super().__init__(config)
-        self.model  = config.get("model ", "s2t")+".json"
+        self.model = config.get("model ", "s2t") + ".json"
         self.converter = opencc.OpenCC(self.model)
 
     def translate(self, text: str) -> str:
@@ -91,6 +199,7 @@ class OpenCCTranslateEngine(BaseTranslateEngine):
             return self.converter.convert(text)
         except Exception as e:
             raise RuntimeError(f"翻譯失敗: {e}")
+
 
 class TranslateEngineFactory:
     @staticmethod
@@ -100,6 +209,10 @@ class TranslateEngineFactory:
             return GeminiTranslateEngine(config)
         elif engine_type == "ollama":
             return OllamaTranslateEngine(config)
+        elif engine_type == "nllb":
+            return NLLBTranslateEngine(config)
+        elif engine_type == "m2m":
+            return M2MTranslateEngine(config)
         elif engine_type == "opencc":
             return OpenCCTranslateEngine(config)
         else:

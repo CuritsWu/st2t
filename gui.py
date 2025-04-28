@@ -8,7 +8,8 @@ from tkinter import messagebox, ttk
 
 import soundcard as sc
 
-from config.path import CHOICES_PATH, DEFAULT_CFG_PATH, USER_CFG_PATH
+from config.path import (CHOICES_PATH, DEFAULT_CFG_PATH, TRANSLATE_MODEL_PATH,
+                         USER_CFG_PATH)
 
 
 # ---------------------------------------------
@@ -70,6 +71,10 @@ class ConfigGUI(tk.Tk):
         # 載入聲卡裝置列表
         self.mic_list = [m.name for m in sc.all_microphones(include_loopback=False)]
         self.spk_list = [s.name for s in sc.all_speakers()]
+        # 載入翻譯模型列表
+        self.translate_model_dict = json.loads(
+            TRANSLATE_MODEL_PATH.read_text(encoding="utf-8")
+        )
 
         # Notebook
         notebook = ttk.Notebook(self)
@@ -173,13 +178,18 @@ class ConfigGUI(tk.Tk):
                 widget = ttk.Entry(row, textvariable=var, width=21)
 
             widget.pack(side="left")
-            var.trace_add("write", lambda *_, p=dot_path, v=var: self._write_cfg(p, v.get()))
+            var.trace_add(
+                "write", lambda *_, p=dot_path, v=var: self._write_cfg(p, v.get())
+            )
             self.widgets[section][key] = widget
 
-            # 如果是 input_config.engine_type，要更新 device_name 清單
             if dot_path == "input_config.engine_type":
                 var.trace_add(
                     "write", lambda *_, v=var: self._on_input_engine_change(v)
+                )
+            elif dot_path == "translate_config.engine_type":
+                var.trace_add(
+                    "write", lambda *_, v=var: self._on_translate_engine_change(v)
                 )
 
         self._update_visibility(section)
@@ -193,6 +203,13 @@ class ConfigGUI(tk.Tk):
 
     def _get_device_list(self, eng):
         return self.spk_list if eng == "system" else self.mic_list
+
+    def _on_translate_engine_change(self, var: tk.StringVar):
+        val = var.get()
+        self._write_cfg("translate_config.engine_type", val)
+        cb = self.widgets["translate_config"]["model"]
+        cb["values"] = self.translate_model_dict.get(val)
+        cb.set("")
 
     def _on_input_engine_change(self, var: tk.StringVar):
         val = var.get()
@@ -236,9 +253,15 @@ class ConfigGUI(tk.Tk):
                     row.grid()
             elif section == "translate_config":
                 if key == "target_lang":
-                    row.grid() if eng == "ollama" or eng =="gemini" else row.grid_remove()
-                elif key =="temperature":
-                    row.grid() if eng == "ollama" or eng =="gemini" else row.grid_remove()
+                    row.grid_remove() if eng == "opencc" else row.grid()
+                elif key == "source_lang":
+                    (
+                        row.grid_remove()
+                        if eng in ["gemini", "ollama", "opencc"]
+                        else row.grid()
+                    )
+                elif key == "temperature":
+                    row.grid_remove() if eng == "opencc" else row.grid()
                 else:
                     row.grid()
             else:

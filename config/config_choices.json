@@ -18,15 +18,13 @@
     "transcribe_config.compute_type": [
         "int8",
         "float16",
-        "float32",
-        "auto"
+        "float32"
     ],
     "transcribe_config.language": [
         "auto",
         "en",
         "ja",
-        "zh",
-        "zh-TW"
+        "zh"
     ],
     "transcribe_config.task": [
         "transcribe",
@@ -35,13 +33,20 @@
     "translate_config.engine_type": [
         "gemini",
         "ollama",
-        "opencc"
+        "opencc",
+        "nllb",
+        "m2m"
+    ],
+    "translate_config.model": [],
+    "translate_config.source_lang": [
+        "繁體中文",
+        "英文",
+        "日文"
     ],
     "translate_config.target_lang": [
         "繁體中文",
-        "简体中文",
-        "English",
-        "日本語"
+        "英文",
+        "日文"
     ],
     "output_config.engine_type": [
         "window"

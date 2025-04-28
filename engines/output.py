@@ -1,7 +1,7 @@
 # engines/output.py
 
 import logging
-import threading
+import queue
 import tkinter as tk
 from abc import ABC, abstractmethod
 
@@ -27,9 +27,11 @@ class WindowOutputEngine(BaseOutputEngine):
         self.font_size = config.get("font_size", 24)
         self.font_color = config.get("font_color", "#00FF99")
         self.transparent_bg = config.get("transparent_bg", True)
+        self.wrap_length = config.get("wrap_length", 800)
         self.text = ""
         self.root = None
         self.label = None
+        self.queue = queue.Queue()
 
     def _start_move(self, event):
         self._x_offset = event.x
@@ -41,7 +43,6 @@ class WindowOutputEngine(BaseOutputEngine):
         self.root.geometry(f"+{x}+{y}")
 
     def _run_window(self):
-        self.root = tk.Tk()
         self.root.title("字幕翻譯")
         self.root.attributes("-topmost", True)
         self.root.overrideredirect(True)
@@ -57,6 +58,8 @@ class WindowOutputEngine(BaseOutputEngine):
             font=("Helvetica", self.font_size),
             fg=self.font_color,
             bg="black",
+            wraplength=self.wrap_length,
+            justify="left",
         )
         self.label.pack()
         self.label.bind("<Button-1>", self._start_move)
@@ -67,12 +70,21 @@ class WindowOutputEngine(BaseOutputEngine):
         self.root.mainloop()
 
     def start(self):
-        threading.Thread(target=self._run_window, daemon=True).start()
+        self.root = tk.Tk()
+        self._poll_queue()
+        self._run_window()
+
+    def _poll_queue(self):
+        try:
+            while True:
+                text = self.queue.get_nowait()
+                self.label.config(text=text)  # 只在 Tk 執行緒動 GUI
+        except queue.Empty:
+            pass
+        self.root.after(30, self._poll_queue)  # 30ms 更新一次
 
     def display(self, text: str):
-        self.text = text
-        if self.label:
-            self.label.config(text=text)
+        self.queue.put(text)  # 任意 thread 只丟 queue
 
     def stop(self):
         if self.root:

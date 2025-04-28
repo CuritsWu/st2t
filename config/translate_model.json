@@ -1,0 +1,22 @@
+{
+    "gemini": [
+        "gemini-2.0-flash-lite"
+    ],
+    "ollama": [
+        "gemma3"
+    ],
+    "nllb": [
+        "facebook/nllb-200-distilled-600M",
+        "facebook/nllb-200-1.3B"
+    ],
+    "m2m": [
+        "facebook/m2m100_418M",
+        "facebookm2m100_1.2B"
+    ],
+    "opencc": [
+        "s2t",
+        "s2tw",
+        "t2tw",
+        "hk2t"
+    ]
+}
