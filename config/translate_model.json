@@ -1,7 +1,4 @@
 {
-    "gemini": [
-        "gemini-2.0-flash-lite"
-    ],
     "ollama": [
         "gemma3"
     ],

@@ -8,3 +8,4 @@ key.pem
 help_files/start
 merge.py
 merged_output.py
+merged_output.txt

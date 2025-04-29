@@ -8,11 +8,13 @@ import google.generativeai as genai
 import ollama
 import opencc
 import torch
-from dotenv import load_dotenv
-from transformers import (AutoModelForSeq2SeqLM, AutoTokenizer,
-                          M2M100ForConditionalGeneration, M2M100Tokenizer)
+from transformers import (
+    AutoModelForSeq2SeqLM,
+    AutoTokenizer,
+    M2M100ForConditionalGeneration,
+    M2M100Tokenizer,
+)
 
-load_dotenv()
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
@@ -48,21 +50,6 @@ class AITranslateEngine(BaseTranslateEngine):
     def __init__(self, config: dict):
         super().__init__(config)
         self.temperature = config.get("temperature", 0)
-
-
-class GeminiTranslateEngine(AITranslateEngine):
-    def __init__(self, config: dict):
-        super().__init__(config)
-        api_key = os.getenv("google_key")
-        if not api_key:
-            raise ValueError("Gemini API 金鑰未設定")
-        genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel("gemini-2.0-flash-lite")
-
-    def translate(self, text: str) -> str:
-        prompt = f"請將以下文字翻譯成 {self.dest}，並只給我翻譯內容回復，確保滿足以上條件再回覆：\n{text}"
-        response = self.model.generate_content(prompt)
-        return response.text.strip()
 
 
 class OllamaTranslateEngine(AITranslateEngine):

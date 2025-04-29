@@ -6,8 +6,12 @@ import threading
 from pathlib import Path
 
 from config.path import DEFAULT_CFG_PATH, USER_CFG_PATH
-from engines.factory import (OutputEngineFactory, TranscribeEngineFactory,
-                             TranslateEngineFactory, VoiceInputEngineFactory)
+from engines.factory import (
+    OutputEngineFactory,
+    TranscribeEngineFactory,
+    TranslateEngineFactory,
+    VoiceInputEngineFactory,
+)
 from utils.common import deep_update
 
 
@@ -43,6 +47,8 @@ if __name__ == "__main__":
         print("\n🛑 偵測到 Ctrl+C，中止...\n")
         if input_engine:
             input_engine.stop()
+        if output_engine:
+            output_engine.stop()
         sys.exit(0)
 
     signal.signal(signal.SIGINT, signal_handler)
