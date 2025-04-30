@@ -2,8 +2,11 @@
 
 import logging
 import queue
+import threading
+import time
 import tkinter as tk
 from abc import ABC, abstractmethod
+from multiprocessing.connection import Listener
 
 logger = logging.getLogger(__name__)
 
@@ -91,11 +94,36 @@ class WindowOutputEngine(BaseOutputEngine):
             self.root.quit()
 
 
+class SocketOutputEngine(BaseOutputEngine):
+    def __init__(self, config: dict):
+        self.address = ("localhost", 6001)
+        self.listener = None
+        self.conn = None
+        self.authkey = None
+
+    def start(self):
+        self.listener = Listener(self.address, authkey=self.authkey)
+        self.conn = self.listener.accept()
+        while True:
+            time.sleep(1)
+
+    def display(self, text):
+        self.conn.send(text)
+
+    def stop(self):
+        if self.conn:
+            self.conn.close()
+        if self.listener:
+            self.listener.close()
+
+
 class OutputEngineFactory:
     @staticmethod
     def create(config: dict) -> BaseOutputEngine:
         engine_type = config.get("engine_type", "window")
         if engine_type == "window":
             return WindowOutputEngine(config)
+        elif engine_type == "socket":
+            return SocketOutputEngine(config)
         else:
             raise ValueError(f"未知的輸出引擎類型: {engine_type}")

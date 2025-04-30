@@ -4,6 +4,7 @@ import time
 
 import soundcard as sc
 
+from adapters.recorder_adapter import ListenerRecorderAdapter
 from utils.simple import SimpleThreadDeque
 
 logger = logging.getLogger(__name__)
@@ -124,6 +125,17 @@ class SystemAudioInputEngine(BaseInputEngine):
         self.streamer.start()
 
 
+class SocketInputEngine(BaseInputEngine):
+    def __init__(self, config: dict):
+        super().__init__(config.get("sample_rate", 16000))
+        self.address = ("localhost", 6000)
+
+    def start(self):
+        recorder = ListenerRecorderAdapter(address=self.address)
+        self.streamer = AudioInputStream(recorder, self.sample_rate)
+        self.streamer.start()
+
+
 class VoiceInputEngineFactory:
     @staticmethod
     def create(config: dict):
@@ -132,5 +144,7 @@ class VoiceInputEngineFactory:
             return MicrophoneInputEngine(config)
         elif engine_type == "system":
             return SystemAudioInputEngine(config)
+        elif engine_type == "socket":
+            return SocketInputEngine(config)
         else:
             raise ValueError(f"未知的輸入引擎類型: {engine_type}")

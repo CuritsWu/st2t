@@ -1,61 +1,100 @@
 <!doctype html>
-<html lang="en">
+<html lang="zh-Hant">
 
 <head>
     <meta charset="utf-8" />
-    <!-- <title>Realtime Caption</title> -->
     <style>
-        /* ---------- 配色 ---------- */
         body {
             background: #fff;
             color: #000;
             font: 20px/1.6 monospace;
-            text-align: center
+            text-align: center;
         }
 
         #caption {
             margin-top: 30vh;
             font-size: 2.5rem;
-            word-break: break-all;
+            word-break: break-word;
             white-space: pre-wrap;
         }
     </style>
 </head>
 
 <body>
-    <h1>🎙️ Realtime Caption</h1>
     <div id="caption">(等待麥克風授權…)</div>
 
     <script>
+        const SAMPLE_RATE = 16000;
+
+        // 建立自動重連 WebSocket
+        function createWebSocket(url, onMessage, name = '') {
+            let ws;
+
+            function connect() {
+                ws = new WebSocket(url);
+
+                ws.onopen = () => console.log(`[WebSocket] ${name} 連線成功`);
+                ws.onmessage = onMessage;
+                ws.onclose = () => {
+                    console.warn(`[WebSocket] ${name} 中斷，3秒後重連…`);
+                    setTimeout(connect, 3000);
+                };
+                ws.onerror = () => {
+                    ws.close(); // 強制觸發 onclose
+                };
+            }
+
+            connect();
+            return () => ws.close();
+        }
+
         (async () => {
-            /* --------- 自動執行 --------- */
-            const SAMPLE_RATE = 16000;
+            // 建立字幕 WebSocket
+            const stopCaptionWS = createWebSocket(
+                `wss://${location.host}/ws/caption`,
+                e => {
+                    document.getElementById('caption').textContent = e.data || '…';
+                },
+                'Caption'
+            );
 
-            /* 1. 連字幕 WebSocket */
-            const capWS = new WebSocket(`wss://${location.host}/ws/caption`);
-            capWS.onmessage = e => {
-                document.getElementById('caption').textContent = e.data || '…';
-            };
-
-            /* 2. 取麥克風 */
+            // 麥克風存取
             let stream;
             try {
-                stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             } catch (err) {
                 document.getElementById('caption').textContent = '💥 無法存取麥克風：' + err.message;
                 return;
             }
 
-            /* 3. 建立 AudioWorklet → 送音訊 */
+            // 建立 AudioContext 與 AudioWorklet
             const ctx = new AudioContext();
-            await ctx.audioWorklet.addModule('/static/worklet.js');
+            try {
+                await ctx.audioWorklet.addModule('/static/worklet.js');
+            } catch (err) {
+                document.getElementById('caption').textContent = '💥 載入 audio worklet 失敗：' + err.message;
+                return;
+            }
+
             const source = ctx.createMediaStreamSource(stream);
             const processor = new AudioWorkletNode(ctx, 'pcm-writer');
 
-            const audioWS = new WebSocket(`wss://${location.host}/ws/audio`);
+            let audioWS = null;
+            function initAudioWS() {
+                audioWS = new WebSocket(`wss://${location.host}/ws/audio`);
+                audioWS.onopen = () => console.log("[WebSocket] Audio 連線成功");
+                audioWS.onclose = () => {
+                    console.warn("[WebSocket] Audio 中斷，3秒後重連…");
+                    setTimeout(initAudioWS, 3000);
+                };
+                audioWS.onerror = () => audioWS.close();
+            }
+
+            initAudioWS();
+
             processor.port.onmessage = e => {
-                if (audioWS.readyState === WebSocket.OPEN) {
-                    audioWS.send(e.data.buffer);           // Float32Array → ArrayBuffer
+                if (audioWS && audioWS.readyState === WebSocket.OPEN) {
+                    audioWS.send(e.data.buffer);
                 }
             };
 

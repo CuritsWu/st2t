@@ -254,6 +254,12 @@ class ConfigGUI(tk.Tk):
                     row.grid_remove() if eng == "opencc" else row.grid()
                 else:
                     row.grid()
+            elif section == "input_config":
+                if key == "device_name":
+                    row.grid_remove() if eng == "socket" else row.grid()
+            elif section == "output_config":
+                if key in ("transparent_bg", "font_size", "font_color", "wrap_length"):
+                    row.grid_remove() if eng == "socket" else row.grid()
             else:
                 row.grid()
 
@@ -273,7 +279,7 @@ class ConfigGUI(tk.Tk):
         if self.proc and self.proc.poll() is None:
             try:
                 self.proc.send_signal(signal.CTRL_BREAK_EVENT)
-                self.proc.wait(5)
+                self.proc.wait()
             except:
                 pass
         self.proc = None

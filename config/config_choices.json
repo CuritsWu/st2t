@@ -1,7 +1,8 @@
 {
     "input_config.engine_type": [
         "microphone",
-        "system"
+        "system",
+        "socket"
     ],
     "input_config.device_name": [],
     "transcribe_config.engine_type": [
@@ -49,6 +50,7 @@
         "日文"
     ],
     "output_config.engine_type": [
-        "window"
+        "window",
+        "socket"
     ]
 }

@@ -8,12 +8,8 @@ import google.generativeai as genai
 import ollama
 import opencc
 import torch
-from transformers import (
-    AutoModelForSeq2SeqLM,
-    AutoTokenizer,
-    M2M100ForConditionalGeneration,
-    M2M100Tokenizer,
-)
+from transformers import (AutoModelForSeq2SeqLM, AutoTokenizer,
+                          M2M100ForConditionalGeneration, M2M100Tokenizer)
 
 logging.getLogger("httpx").setLevel(logging.WARNING)
 

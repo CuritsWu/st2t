@@ -6,12 +6,8 @@ import threading
 from pathlib import Path
 
 from config.path import DEFAULT_CFG_PATH, USER_CFG_PATH
-from engines.factory import (
-    OutputEngineFactory,
-    TranscribeEngineFactory,
-    TranslateEngineFactory,
-    VoiceInputEngineFactory,
-)
+from engines.factory import (OutputEngineFactory, TranscribeEngineFactory,
+                             TranslateEngineFactory, VoiceInputEngineFactory)
 from utils.common import deep_update
 
 
@@ -40,9 +36,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     config = load_config(args.config)
-    # ---------- Ctrl-C 處理 ---------- #
-    input_engine = None
 
+    # ---------- Ctrl-C 處理 ---------- #
     def signal_handler(sig, frame):
         print("\n🛑 偵測到 Ctrl+C，中止...\n")
         if input_engine:
@@ -52,6 +47,7 @@ if __name__ == "__main__":
         sys.exit(0)
 
     signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGBREAK, signal_handler)
 
     # ---------- 執行 ---------- #
@@ -65,7 +61,6 @@ if __name__ == "__main__":
     print("\n📡 開始錄音中，請說話...（Ctrl+C 可中止）")
     stt_engine = TranscribeEngineFactory.create(config["transcribe_config"])
     input_engine.start()
-
     # === 翻譯器（可選） ===
     trans_cfg = config.get("translate_config", {})
     if trans_cfg.get("enabled", False):
@@ -75,7 +70,6 @@ if __name__ == "__main__":
 
     # === 輸出 ===
     output_engine = OutputEngineFactory.create(config["output_config"])
-    # output_engine.start()
 
     def create_stream():
         raw_stream = stt_engine.transcribe_stream(input_engine.stream_audio())
@@ -87,4 +81,4 @@ if __name__ == "__main__":
             output_engine.display(text)  # 把結果推進 queue
 
     threading.Thread(target=stt_worker, daemon=True).start()
-    output_engine.start()
+    output_engine.start()  # main thread
