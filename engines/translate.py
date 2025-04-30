@@ -57,9 +57,14 @@ class OllamaTranslateEngine(AITranslateEngine):
         super().__init__(config)
         self.model = config.get("model", "gemma3")
         os.environ["OLLAMA_TIMEOUT"] = "10"
+        self.topic: str = ""
 
     def translate(self, text: str) -> str:
-        prompt = f"請將以下文字翻譯成 {self.dest}，並只給我翻譯內容回復，確保滿足以上條件再回覆：\n{text}"
+        prompt = f"""將以下STT來源的文本翻譯成【目標語言】，如有需要請補足語意並修正錯誤，使語句自然通順。根據【主題（可選）】調整語氣。僅輸出翻譯結果，不附加任何說明。
+
+【目標語言】：{self.dest}
+【主題（可選）】：{self.topic}
+【文本】：{text}"""
         try:
             response = ollama.chat(
                 model=self.model,

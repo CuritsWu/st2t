@@ -144,12 +144,6 @@ class BaseTranscribeEngine(ABC):
             " goodbye everyone",
             " have a great day",
             # ==== 中文 (繁/簡) ====
-            " 中文字幕志願者",
-            " 中文字幕志愿者",
-            " 正體中文語音",
-            " 實體中文語音",
-            " 謝謝大家",
-            " 谢谢大家",
             " 感謝觀看",
             "感谢观看",
             " 感謝收聽",
@@ -358,6 +352,14 @@ class SlidingWindowTranscribeEngine(BaseTranscribeEngine):
                 new_samples = 0
 
                 new_segs = [s for s in segments if s.end > last_end_time]
+                if self.suppress:
+                    new_segs = [
+                        seg
+                        for seg in new_segs
+                        if seg.avg_logprob >= -1.0
+                        or (seg.end - seg.start) / len(seg.text) >= 0.07
+                    ]
+
                 if not new_segs:
                     last_end_time = 0
                     self.reset_buffer(full_silence=True)
