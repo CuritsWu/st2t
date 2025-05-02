@@ -67,31 +67,3 @@ class SimpleThreadDeque(deque[T]):
             return iter(list(self))  # 複製一份避免遍歷時被改動
 
     # 其他還想鎖住的方法，可依需要覆寫
-
-
-# --------------------- 測試用例 ---------------------
-if __name__ == "__main__":
-    import random
-    import threading
-    import time
-
-    dq = SimpleThreadDeque(maxlen=10)
-
-    def producer():
-        for i in range(30):
-            dq.append(i)
-            print(f"P → {i:02d}  (len={len(dq)})")
-            time.sleep(random.random() * 0.05)
-
-    def consumer():
-        while True:
-            try:
-                item = dq.popleft()
-                print(f"      C ← {item:02d} (len={len(dq)})")
-            except IndexError:
-                pass
-            time.sleep(0.03)
-
-    threading.Thread(target=producer, daemon=True).start()
-    threading.Thread(target=consumer, daemon=True).start()
-    time.sleep(2)
