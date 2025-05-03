@@ -8,12 +8,29 @@ import numpy as np
 import soundfile as sf
 from faster_whisper import WhisperModel
 from faster_whisper.tokenizer import Tokenizer
+from funasr import AutoModel
+
+from .translate import OpenCCTranslateEngine
 
 # 將 faster_whisper 的詳盡 debug 訊息關掉，保持輸出乾淨
 logging.getLogger("faster_whisper").setLevel(logging.WARNING)
 
 
 class BaseTranscribeEngine(ABC):
+    def __init__(self, config: dict):
+        self.sample_rate = config.get("sample_rate", 16000)
+
+    @abstractmethod
+    def transcribe_stream(self, audio_stream):
+        pass
+
+    def process_audio_chunk(self, chunk: np.ndarray) -> np.ndarray:
+        if chunk.ndim == 2:
+            chunk = np.mean(chunk, axis=1)
+        return chunk
+
+
+class WhisperBaseTranscribeEngine(BaseTranscribeEngine):
     def __init__(self, config: dict):
         # ----- 模型設定 -----
         self.model_size = config.get("model_size", "large-v3")
@@ -22,24 +39,24 @@ class BaseTranscribeEngine(ABC):
             self.model_size, device="cuda", compute_type=self.compute_type
         )
 
-        # ----- 音訊與語言 -----
+        # ----- 音訊與語言設定 -----
         self.sample_rate = config.get("sample_rate", 16000)
         lang = config.get("language", None)
         self.language = None if lang == "auto" else lang
         self.task = config.get("task", "transcribe")
         self.init_prompt = config.get("init_prompt", "")
 
-        # ----- 緩衝設定（依 GPU 容量 / 延遲需求調整） -----
-        self.max_buffer_sec = config.get("max_buffer_sec", 12.0)  # 推薦 12–15 秒
+        # ----- 緩衝設定（依延遲 / GPU 記憶體調整） -----
+        self.max_buffer_sec = config.get("max_buffer_sec", 12.0)
         self._buffer: deque[np.ndarray] = deque()
         self._total_samples = 0
         self._max_samples = int(self.max_buffer_sec * self.sample_rate)
 
-        # ----- 解碼與抑制參數（Real‑time + 高準度 + 抗幻覺） -----
+        # ----- 解碼與抗幻覺設定 -----
         self.beam_size = config.get("beam_size", 5)
         temp = map(
             lambda t: float(t.strip()),
-            config.get("temperature", "0.0, 0.2, 0.4").split(","),
+            filter(None, config.get("temperature", "0.0, 0.2, 0.4").split(",")),
         )
         self.temperature = [*temp]
         self.vad_threshold = config.get("vad_threshold", 0.7)
@@ -53,6 +70,8 @@ class BaseTranscribeEngine(ABC):
         )
         self.repetition_penalty = config.get("repetition_penalty", 1.1)
         self.no_repeat_ngram_size = config.get("no_repeat_ngram_size", 3)
+
+        # ----- 上下文記憶設定 -----
         self.condition_on_previous_text = config.get(
             "condition_on_previous_text", False
         )
@@ -60,15 +79,14 @@ class BaseTranscribeEngine(ABC):
             "prompt_reset_on_temperature", 0.3
         )
 
-        # ── 句 / 字級時間碼 ─────────────────────────────
-        self.without_timestamps = config.get("without_timestamps", False)
+        # ----- 時間碼設定 -----
         self.word_timestamps = config.get("word_timestamps", False)
 
-        # ----- 抑制口號與空白 -----
+        # ----- 抑制特殊符號與空白 -----
         self.suppress = config.get("suppress", True)
         self.init_suppress_tokens()
 
-        # ----- 暖機 -----
+        # ----- 暖機（提升第一次呼叫速度） -----
         self.warm_up = config.get("warm_up", True)
         self.do_warm_up()
 
@@ -105,8 +123,7 @@ class BaseTranscribeEngine(ABC):
         except Exception as e:
             logging.error(f"warm_up transcribe 發生錯誤：{e}")
 
-        self.reset_buffer()
-        self.full_silence()
+        self.reset_buffer(full_silence=True)
 
     def full_silence(self):
         # 填充一段靜音以確保解碼圖被初始化
@@ -144,6 +161,7 @@ class BaseTranscribeEngine(ABC):
             " goodbye everyone",
             " have a great day",
             # ==== 中文 (繁/簡) ====
+            " 正體中文",
             " 感謝觀看",
             "感谢观看",
             " 感謝收聽",
@@ -254,7 +272,7 @@ class BaseTranscribeEngine(ABC):
             self.full_silence()
 
 
-class OverlapTranscribeEngine(BaseTranscribeEngine):
+class OverlapTranscribeEngine(WhisperBaseTranscribeEngine):
     def __init__(self, config: dict):
         super().__init__(config)
         self.overlap_sec = config.get("overlap_sec", 1.0)
@@ -299,14 +317,13 @@ class OverlapTranscribeEngine(BaseTranscribeEngine):
                 self._total_samples = len(overlap_data)
 
 
-class SlidingWindowTranscribeEngine(BaseTranscribeEngine):
+class SlidingWindowTranscribeEngine(WhisperBaseTranscribeEngine):
     def __init__(self, config: dict):
         super().__init__(config)
         self.interval_sec = config.get("interval_sec", 3.0)
         self._interval_samples = int(self.sample_rate * self.interval_sec)
 
     def transcribe_stream(self, audio_stream):
-        last_end_time = 0.0
         new_samples = 0
         for chunk in audio_stream:
             chunk = self.process_audio_chunk(chunk)
@@ -350,32 +367,110 @@ class SlidingWindowTranscribeEngine(BaseTranscribeEngine):
                 self._interval_samples = int(target_interval * self.sample_rate)
 
                 new_samples = 0
+                # yield from map(lambda seg:seg.text.strip(), segments)
+                yield from self._sentence(segments)
 
-                new_segs = [s for s in segments if s.end > last_end_time]
-                if self.suppress:
-                    new_segs = [
-                        seg
-                        for seg in new_segs
-                        if seg.avg_logprob >= -1.0
-                        or (seg.end - seg.start) / len(seg.text) >= 0.07
-                    ]
+    def _sentence(self, segments):
+        sentences = []
+        count = 0
+        for seg in segments:
+            if seg.text:  # and (seg.end - seg.start) / len(seg.text) >= 0.07:
+                sentences.append(seg.text)
+                count = 0
+            else:
+                count += 1
+            if count > 1:
+                sentences.clear()
+            yield ", ".join(sentences)
 
-                if not new_segs:
-                    last_end_time = 0
-                    self.reset_buffer(full_silence=True)
-                    yield ""
+
+class FunASRTranscribeEngine(BaseTranscribeEngine):
+    def __init__(self, config: dict):
+        super().__init__(config)
+        self.chunk_size = config.get("chunk_size", [0, 10, 5])
+        self.encoder_chunk_look_back = config.get("encoder_chunk_look_back", 4)
+        self.decoder_chunk_look_back = config.get("decoder_chunk_look_back", 1)
+        self.model = AutoModel(
+            model="paraformer-zh-streaming",
+            disable_update=True,
+            hub="hf",
+            disable_pbar=True,
+        )
+        self.ct_model = AutoModel(
+            model="ct-punc", disable_update=True, hub="hf", disable_pbar=True
+        )
+
+        self.chunk_samples = self.chunk_size[1] * 960
+        self.buffer = np.zeros((0,), dtype=np.float32)
+        self.cache = {}
+
+    def transcribe_stream(self, audio_stream):
+
+        s2tw = OpenCCTranslateEngine({"model": "s2tw"})
+        sentences = deque(maxlen=10)
+        for audio_chunk in audio_stream:
+            chunk = self.process_audio_chunk(audio_chunk)
+            self.buffer = np.concatenate((self.buffer, chunk.flatten()))
+
+            count = 0
+            while len(self.buffer) >= self.chunk_samples:
+                speech_chunk = self.buffer[: self.chunk_samples]
+                self.buffer = self.buffer[self.chunk_samples :]
+
+                res = self.model.generate(
+                    input=speech_chunk,
+                    cache=self.cache,
+                    is_final=False,
+                    chunk_size=self.chunk_size,
+                    encoder_chunk_look_back=self.encoder_chunk_look_back,
+                    decoder_chunk_look_back=self.decoder_chunk_look_back,
+                    disable_pbar=True,
+                )
+
+                if res and res[0].get("text", "").strip():
+                    sentences.append(res[0]["text"])
+                    count = 0
                 else:
-                    last_end_time = new_segs[-1].end
-                    yield "".join(s.text for s in new_segs).strip()
+                    count += 1
+                if count > 1:
+                    sentences.clear()
+                if sentences:
+                    res = self.ct_model.generate(
+                        input=s2tw.translate("".join(sentences))
+                    )[0]["text"]
+                    try:
+                        idx = res.index("。")
+                        res = res[idx + 1 :]
+                    except:
+                        pass
+                else:
+                    res = ""
+                yield res
+
+        # 收尾處理
+        if len(self.buffer) > 0:
+            res = self.model.generate(
+                input=self.buffer,
+                cache=self.cache,
+                is_final=True,
+                chunk_size=self.chunk_size,
+                encoder_chunk_look_back=self.encoder_chunk_look_back,
+                decoder_chunk_look_back=self.decoder_chunk_look_back,
+            )
+            if res and "text" in res[0] and res[0]["text"] and res[0]["text"].strip():
+                yield res[0]["text"]
 
 
 class TranscribeEngineFactory:
     @staticmethod
     def create(config: dict):
         engine_type = config.get("engine_type", "overlap")
+        # engine_type="funasr"
         if engine_type == "overlap":
             return OverlapTranscribeEngine(config)
         elif engine_type == "sliding":
             return SlidingWindowTranscribeEngine(config)
+        elif engine_type == "funasr":
+            return FunASRTranscribeEngine(config)
         else:
             raise ValueError(f"未知的引擎類型: {engine_type}")

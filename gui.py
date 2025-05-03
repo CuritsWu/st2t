@@ -117,10 +117,10 @@ class ConfigGUI(tk.Tk):
             current_value = self._get_config_value(section, key, default_value)
 
             if path == "input_config.device_name":
-                engine = self.user_config["input_config"].get(
+                engine_type = self.user_config["input_config"].get(
                     "engine_type", self.default_config["input_config"]["engine_type"]
                 )
-                choices = self._get_device_list(engine)
+                choices = self._get_device_list(engine_type)
 
             if choices is not None:
                 var = tk.StringVar(value=str(current_value))
@@ -201,32 +201,34 @@ class ConfigGUI(tk.Tk):
             self._update_section_visibility(section)
 
     def _update_section_visibility(self, section):
-        engine = self.user_config.get(section, {}).get(
+        engine_type = self.user_config.get(section, {}).get(
             "engine_type", self.default_config[section].get("engine_type")
         )
         for key, row in self.section_rows[section].items():
             visible = True
             if section == "transcribe_config":
                 if key == "overlap_sec":
-                    visible = engine == "overlap"
+                    visible = engine_type == "overlap"
                 elif key == "interval_sec":
-                    visible = engine == "sliding"
+                    visible = engine_type == "sliding"
+                elif key != "engine_type":
+                    visible = engine_type != "funasr"
             elif section == "translate_config":
                 if key == "target_lang":
-                    visible = engine != "opencc"
+                    visible = engine_type != "opencc"
                 elif key == "source_lang":
-                    visible = engine not in ["gemini", "ollama", "opencc"]
+                    visible = engine_type not in ["gemini", "ollama", "opencc"]
                 elif key == "temperature":
-                    visible = engine != "opencc"
+                    visible = engine_type != "opencc"
             elif section == "input_config" and key == "device_name":
-                visible = engine != "socket"
+                visible = engine_type != "socket"
             elif section == "output_config" and key in (
                 "transparent_bg",
                 "font_size",
                 "font_color",
                 "wrap_length",
             ):
-                visible = engine != "socket"
+                visible = engine_type != "socket"
 
             row.grid() if visible else row.grid_remove()
 

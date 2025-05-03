@@ -4,12 +4,9 @@ import time
 from abc import ABC, abstractmethod
 from typing import Iterator
 
-import google.generativeai as genai
 import ollama
 import opencc
 import torch
-from transformers import (AutoModelForSeq2SeqLM, AutoTokenizer,
-                          M2M100ForConditionalGeneration, M2M100Tokenizer)
 
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
@@ -87,6 +84,8 @@ class NLLBTranslateEngine(AITranslateEngine):
             raise ValueError(f"未定義語言代碼：{lang_name}")
 
     def __init__(self, config: dict):
+        from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+
         super().__init__(config)
         self.model_name = config.get("model", "facebook/nllb-200-distilled-600M")
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -140,6 +139,9 @@ class M2MTranslateEngine(AITranslateEngine):
             raise ValueError(f"未定義語言代碼：{lang_name}")
 
     def __init__(self, config):
+        from transformers import (M2M100ForConditionalGeneration,
+                                  M2M100Tokenizer)
+
         super().__init__(config)
         self.model_name = config.get("model", "facebook/m2m100_418M")
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -179,7 +181,7 @@ class M2MTranslateEngine(AITranslateEngine):
 class OpenCCTranslateEngine(BaseTranslateEngine):
     def __init__(self, config: dict):
         super().__init__(config)
-        self.model = config.get("model ", "s2t") + ".json"
+        self.model = config.get("model", "s2t") + ".json"
         self.converter = opencc.OpenCC(self.model)
 
     def translate(self, text: str) -> str:
@@ -193,9 +195,7 @@ class TranslateEngineFactory:
     @staticmethod
     def create(config: dict):
         engine_type = config.get("engine_type", "ollama")
-        if engine_type == "gemini":
-            return GeminiTranslateEngine(config)
-        elif engine_type == "ollama":
+        if engine_type == "ollama":
             return OllamaTranslateEngine(config)
         elif engine_type == "nllb":
             return NLLBTranslateEngine(config)

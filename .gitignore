@@ -9,3 +9,5 @@ help_files/start
 merge.py
 merged_output.py
 merged_output.txt
+.venv*
+diff_outpu.txt

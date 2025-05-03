@@ -1,7 +1,6 @@
 # web/server.py
 import asyncio
 import threading
-from multiprocessing.connection import Client
 from pathlib import Path
 
 import uvicorn

@@ -8,7 +8,7 @@
     ],
     "m2m": [
         "facebook/m2m100_418M",
-        "facebookm2m100_1.2B"
+        "facebook/m2m100_1.2B"
     ],
     "opencc": [
         "s2t",
