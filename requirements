@@ -1,24 +1,18 @@
-SoundCard
+--extra-index-url https://download.pytorch.org/whl/cu128
+torch
+torchaudio
+soundcard
 sounddevice
 soundfile
 scipy
-
 faster-whisper
 funasr
-
 ollama
-
 opencc
-
 transformers
 sentencepiece
 accelerate
-
 fastapi
 uvicorn[standard]
 python-multipart
 websockets
-
---index-url https://download.pytorch.org/whl/cu128
-torch
-torchaudio

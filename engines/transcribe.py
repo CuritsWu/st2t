@@ -381,7 +381,7 @@ class SlidingWindowTranscribeEngine(WhisperBaseTranscribeEngine):
                 count += 1
             if count > 1:
                 sentences.clear()
-            yield ", ".join(sentences)
+            yield " ".join(sentences)
 
 
 class FunASRTranscribeEngine(BaseTranscribeEngine):
