@@ -42,7 +42,7 @@
 
 ## 環境準備
 
-1.  **Python:** 建議使用 Python 3.10 或 3.11。
+1.  **Python:** 建議使用 Python 3.12。
 2.  **CUDA Toolkit:** 若要使用 GPU 加速 (強烈建議)，請先安裝與您顯卡驅動相容的 NVIDIA CUDA Toolkit (例如 12.1 或更新版本)。 [CUDA 下載](https://developer.nvidia.com/cuda-downloads)
 3.  **Git:** 用於克隆本專案。
 4.  **(Web Server 選用) SSL 憑證:** 若要使用網頁介面 (`https://`)，瀏覽器通常需要 HTTPS 才能存取麥克風。您需要產生自我簽署或有效的 SSL 憑證 (`cert.pem`, `key.pem`) 並放在專案根目錄。可以使用 `openssl` 等工具生成：

@@ -52,15 +52,6 @@
         }
 
         (async () => {
-            // 建立字幕 WebSocket
-            const stopCaptionWS = createWebSocket(
-                `wss://${location.host}/ws/caption`,
-                e => {
-                    document.getElementById('caption').textContent = e.data || '…';
-                },
-                'Caption'
-            );
-
             // 麥克風存取
             let stream;
             try {
@@ -85,9 +76,12 @@
             let currentAudioWS = null;
             createWebSocket(
                 `wss://${location.host}/ws/audio`,
-                () => { }, // 無需處理 message
+                () => { }, // 無需處理訊息
                 'Audio',
-                ws => { currentAudioWS = ws; }
+                ws => {
+                    currentAudioWS = ws;
+                    document.getElementById('caption').textContent = "http://192.168.1.154:8445/";
+                }
             );
 
             processor.port.onmessage = e => {

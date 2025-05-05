@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="zh-Hant">
+
+<head>
+    <meta charset="utf-8" />
+    <style>
+        body {
+            background: #fff;
+            color: #000;
+            font: 20px/1.6 monospace;
+            text-align: center;
+        }
+
+        #caption {
+            margin-top: 30vh;
+            font-size: 2.5rem;
+            word-break: break-word;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="caption">(等待麥克風授權…)</div>
+
+    <script>
+        const SAMPLE_RATE = 16000;
+
+        // 建立自動重連 WebSocket
+        function createWebSocket(url, onMessage, name = '') {
+            let ws;
+
+            function connect() {
+                ws = new WebSocket(url);
+
+                ws.onopen = () => console.log(`[WebSocket] ${name} 連線成功`);
+                ws.onmessage = onMessage;
+                ws.onclose = () => {
+                    console.warn(`[WebSocket] ${name} 中斷，3秒後重連…`);
+                    setTimeout(connect, 3000);
+                };
+                ws.onerror = () => {
+                    ws.close(); // 強制觸發 onclose
+                };
+            }
+
+            connect();
+            return () => ws.close();
+        }
+
+        (async () => {
+            // 建立字幕 WebSocket
+            const stopCaptionWS = createWebSocket(
+                `ws://${location.host}/ws/caption`,
+                e => {
+                    document.getElementById('caption').textContent = e.data || '…';
+                },
+                'Caption'
+            );
+        })();
+    </script>
+</body>
+
+</html>

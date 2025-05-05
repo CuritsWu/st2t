@@ -379,7 +379,7 @@ class SlidingWindowTranscribeEngine(WhisperBaseTranscribeEngine):
                 count = 0
             else:
                 count += 1
-            if count > 1:
+            if count > 3:
                 sentences.clear()
             yield " ".join(sentences)
 
@@ -408,11 +408,11 @@ class FunASRTranscribeEngine(BaseTranscribeEngine):
 
         s2tw = OpenCCTranslateEngine({"model": "s2tw"})
         sentences = deque(maxlen=10)
+        count = 0
         for audio_chunk in audio_stream:
             chunk = self.process_audio_chunk(audio_chunk)
             self.buffer = np.concatenate((self.buffer, chunk.flatten()))
 
-            count = 0
             while len(self.buffer) >= self.chunk_samples:
                 speech_chunk = self.buffer[: self.chunk_samples]
                 self.buffer = self.buffer[self.chunk_samples :]
@@ -432,14 +432,14 @@ class FunASRTranscribeEngine(BaseTranscribeEngine):
                     count = 0
                 else:
                     count += 1
-                if count > 1:
+                if count > 3:
                     sentences.clear()
                 if sentences:
                     res = self.ct_model.generate(
                         input=s2tw.translate("".join(sentences))
                     )[0]["text"]
                     try:
-                        idx = res.index("。")
+                        idx = res.index("，")
                         res = res[idx + 1 :]
                     except:
                         pass
