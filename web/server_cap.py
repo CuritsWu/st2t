@@ -34,7 +34,6 @@ async def get_root():
 @app.on_event("startup")
 async def on_startup():
     global text_conn, caption_thread_running
-    print(6666)
     text_conn = ReconnectableClient(("localhost", 6001))
 
     loop = asyncio.get_running_loop()
