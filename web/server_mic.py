@@ -67,5 +67,4 @@ if __name__ == "__main__":
         reload=False,
         ssl_certfile="cert.pem",
         ssl_keyfile="key.pem",
-        lifespan="on",
     )

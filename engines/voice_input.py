@@ -38,7 +38,7 @@ class RecorderWorker(threading.Thread):
 
 
 class AudioInputStream:
-    def __init__(self, recorder, sample_rate: int, chunk_sec=0.03, max_latency=5):
+    def __init__(self, recorder, sample_rate: int, chunk_sec=0.03, max_latency=1.5):
         # chunk_sec = 每幀 n ms, # max_latency = 允許隊列最多積 n s 的音
         maxlen = int(max_latency / chunk_sec)
         self.audio_queue = SimpleThreadDeque(maxlen=maxlen)

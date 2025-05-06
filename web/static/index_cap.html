@@ -21,19 +21,22 @@
 </head>
 
 <body>
-    <div id="caption" style="font-size: 64px; font-weight: bold; color: whitesmoke;">(等待連線…)</div>
+    <div id="caption" style="font-size: 72px; font-weight: bold; color: whitesmoke;">(等待連線…)</div>
 
     <script>
         const SAMPLE_RATE = 16000;
 
         // 建立自動重連 WebSocket
-        function createWebSocket(url, onMessage, name = '') {
+        function createWebSocket(url, onMessage, name = '', onOpenCallback) {
             let ws;
 
             function connect() {
                 ws = new WebSocket(url);
 
-                ws.onopen = () => console.log(`[WebSocket] ${name} 連線成功`);
+                ws.onopen = () => {
+                    console.log(`[WebSocket] ${name} 連線成功`);
+                    if (onOpenCallback) onOpenCallback(ws);
+                };
                 ws.onmessage = onMessage;
                 ws.onclose = () => {
                     console.warn(`[WebSocket] ${name} 中斷，3秒後重連…`);
@@ -53,9 +56,12 @@
             const stopCaptionWS = createWebSocket(
                 `ws://${location.host}/ws/caption`,
                 e => {
-                    document.getElementById('caption').textContent = e.data || '…';
+                    document.getElementById('caption').textContent = e.data || '';
                 },
-                'Caption'
+                'Caption',
+                () => {
+                    document.getElementById('caption').textContent = '';
+                }
             );
         })();
     </script>

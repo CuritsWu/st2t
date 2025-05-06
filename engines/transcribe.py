@@ -115,11 +115,13 @@ class WhisperBaseTranscribeEngine(BaseTranscribeEngine):
 
         try:
             data = np.concatenate(self._buffer)
-            self.model.transcribe(
+            segs,_=self.model.transcribe(
                 data,
                 language=self.language,
                 task=self.task,
             )
+            for _ in segs:
+                pass
         except Exception as e:
             logging.error(f"warm_up transcribe 發生錯誤：{e}")
 
@@ -322,6 +324,9 @@ class SlidingWindowTranscribeEngine(WhisperBaseTranscribeEngine):
         super().__init__(config)
         self.interval_sec = config.get("interval_sec", 3.0)
         self._interval_samples = int(self.sample_rate * self.interval_sec)
+        self.ct_model = AutoModel(
+            model="ct-punc", disable_update=True, hub="hf", disable_pbar=True
+        )
 
     def transcribe_stream(self, audio_stream):
         new_samples = 0
@@ -372,32 +377,29 @@ class SlidingWindowTranscribeEngine(WhisperBaseTranscribeEngine):
 
     def _sentence(self, segments):
         sentences = []
-        count = 0
         for seg in segments:
             if seg.text:  # and (seg.end - seg.start) / len(seg.text) >= 0.07:
                 sentences.append(seg.text)
-                count = 0
-            else:
-                count += 1
-            if count > 3:
-                sentences.clear()
-            yield " ".join(sentences)
+                yield self.ct_model.generate(input="".join(sentences))[0]["text"]
+        if sentences:
+            yield self.ct_model.generate(input="".join(sentences))[0]["text"]
+        else:
+            yield ""
 
 
 class FunASRTranscribeEngine(BaseTranscribeEngine):
     def __init__(self, config: dict):
         super().__init__(config)
-        self.chunk_size = config.get("chunk_size", [0, 10, 5])
+        self.chunk_size = config.get("chunk_size", [0, 12, 4])
         self.encoder_chunk_look_back = config.get("encoder_chunk_look_back", 4)
         self.decoder_chunk_look_back = config.get("decoder_chunk_look_back", 1)
         self.model = AutoModel(
             model="paraformer-zh-streaming",
-            disable_update=True,
             hub="hf",
             disable_pbar=True,
         )
         self.ct_model = AutoModel(
-            model="ct-punc", disable_update=True, hub="hf", disable_pbar=True
+            model="ct-punc", hub="hf", disable_pbar=True
         )
 
         self.chunk_samples = self.chunk_size[1] * 960
@@ -435,14 +437,15 @@ class FunASRTranscribeEngine(BaseTranscribeEngine):
                 if count > 3:
                     sentences.clear()
                 if sentences:
+                    # remove duplicate character
+                    if len(sentences) >=2 and sentences[-2][-1] == sentences[-1][-1]:
+                        if len(sentences[-1]) == 1:
+                            sentences.pop()
+                        else:
+                            sentences[-1] = sentences[-1][1:]
                     res = self.ct_model.generate(
                         input=s2tw.translate("".join(sentences))
                     )[0]["text"]
-                    try:
-                        idx = res.index("，")
-                        res = res[idx + 1 :]
-                    except:
-                        pass
                 else:
                     res = ""
                 yield res
@@ -458,7 +461,8 @@ class FunASRTranscribeEngine(BaseTranscribeEngine):
                 decoder_chunk_look_back=self.decoder_chunk_look_back,
             )
             if res and "text" in res[0] and res[0]["text"] and res[0]["text"].strip():
-                yield res[0]["text"]
+                sentences.append(res[0]["text"])
+                yield self.ct_model.generate(input=s2tw.translate("".join(sentences)))[0]["text"]
 
 
 class TranscribeEngineFactory:
