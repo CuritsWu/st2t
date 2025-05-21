@@ -36,6 +36,8 @@
         "source_lang": "英文",
         "target_lang": "繁體中文",
         "temperature": 0.0,
+        "empty_timeout": 5,
+        "show_source": true,
         "enabled": true
     },
     "output_config": {

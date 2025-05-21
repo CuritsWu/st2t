@@ -69,7 +69,7 @@ class WindowOutputEngine(BaseOutputEngine):
         self.label.bind("<B1-Motion>", self._on_move)
 
         if self.transparent_bg:
-            self.root.attributes("-alpha", 0.7)
+            self.root.attributes("-alpha", 0.8)
         self.root.mainloop()
 
     def start(self):

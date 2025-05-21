@@ -6,7 +6,6 @@ from typing import Iterator
 
 import ollama
 import opencc
-import torch
 
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
@@ -15,6 +14,7 @@ class BaseTranslateEngine(ABC):
     def __init__(self, config: dict):
         self.src = config.get("source_lang", "English")
         self.dest = config.get("target_lang", "繁體中文")
+        self.show_source = config.get("show_source", True)
 
         self.empty_timeout = float(config.get("empty_timeout", 5.0))
         self._last_non_empty = time.time()
@@ -36,7 +36,9 @@ class BaseTranslateEngine(ABC):
                 continue
             self._last_non_empty = now
             self._empty_emitted = False
-            yield text + "\n" + self.translate(text)
+
+            yield text + "\n" + self.translate(text) if self.show_source else self.translate(text)
+
 
 
 class AITranslateEngine(BaseTranslateEngine):
@@ -84,6 +86,7 @@ class NLLBTranslateEngine(AITranslateEngine):
             raise ValueError(f"未定義語言代碼：{lang_name}")
 
     def __init__(self, config: dict):
+        import torch
         from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
         super().__init__(config)
@@ -139,8 +142,8 @@ class M2MTranslateEngine(AITranslateEngine):
             raise ValueError(f"未定義語言代碼：{lang_name}")
 
     def __init__(self, config):
-        from transformers import (M2M100ForConditionalGeneration,
-                                  M2M100Tokenizer)
+        import torch
+        from transformers import M2M100ForConditionalGeneration, M2M100Tokenizer
 
         super().__init__(config)
         self.model_name = config.get("model", "facebook/m2m100_418M")
