@@ -376,9 +376,14 @@ class SlidingWindowTranscribeEngine(WhisperBaseTranscribeEngine):
                 yield from self._sentence(segments)
 
     def _sentence(self, segments):
+        pre_time = time.time()
         sentences = []
         for seg in segments:
-            if seg.text:  # and (seg.end - seg.start) / len(seg.text) >= 0.07:
+            spent_time  = time.time()-pre_time
+            pre_time = time.time()
+            if spent_time == 0:
+                break
+            if seg.text:# and (seg.avg_logprob >= -1.0 or (seg.end - seg.start) / len(seg.text) >= 0.07):
                 sentences.append(seg.text)
                 yield self.ct_model.generate(input="".join(sentences))[0]["text"]
         if sentences:

@@ -87,7 +87,8 @@ class WindowOutputEngine(BaseOutputEngine):
         self.root.after(30, self._poll_queue)  # 30ms 更新一次
 
     def display(self, text: str):
-        self.queue.put(text)  # 任意 thread 只丟 queue
+        # run in other thread to put text for main thread
+        self.queue.put(text)
 
     def stop(self):
         if self.root:
